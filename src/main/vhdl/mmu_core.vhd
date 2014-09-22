@@ -102,32 +102,34 @@ architecture RTL of MMU_CORE is
     -------------------------------------------------------------------------------
     component MMU_TLB 
         generic (
-            TAG_HI      : integer := 32;
-            TAG_LO      : integer := 12;
-            TAG_SETS    : integer :=  4;
-            TAG_WAYS    : integer :=  0;
-            DATA_BITS   : integer := 32;
-            ADDR_BITS   : integer :=  4;
-            SEL_SDPRAM  : integer :=  0
+            TAG_HI          : integer := 32;
+            TAG_LO          : integer := 12;
+            TAG_SETS        : integer :=  4;
+            TAG_WAYS        : integer :=  0;
+            DATA_BITS       : integer := 32;
+            ADDR_BITS       : integer :=  4;
+            NO_KEEP_DATA    : integer :=  0;
+            SEL_SDPRAM      : integer :=  0
         );
         port (
-            CLK         : in  std_logic; 
-            RST         : in  std_logic;
-            CLR         : in  std_logic;
-            Q_TAG       : in  std_logic_vector(TAG_HI downto TAG_LO);
-            Q_SET       : in  std_logic;
-            Q_HIT       : out std_logic;
-            Q_ERR       : out std_logic;
-            Q_DATA      : out std_logic_vector(DATA_BITS-1 downto 0);
-            S_CLR       : in  std_logic;
-            S_START     : in  std_logic;
-            S_TAG       : in  std_logic_vector(TAG_HI downto TAG_LO);
-            S_DONE      : in  std_logic;
-            S_ERR       : in  std_logic;
-            S_ADDR      : in  std_logic_vector(ADDR_BITS  -1 downto 0);
-            S_DATA      : in  std_logic_vector(DATA_BITS  -1 downto 0);
-            S_BEN       : in  std_logic_vector(DATA_BITS/8-1 downto 0);
-            S_WE        : in  std_logic
+            CLK             : in  std_logic; 
+            RST             : in  std_logic;
+            CLR             : in  std_logic;
+            Q_TAG           : in  std_logic_vector(TAG_HI downto TAG_LO);
+            Q_SET_LRU       : in  std_logic;
+            Q_KEEP_DATA     : in  std_logic;
+            Q_HIT           : out std_logic;
+            Q_ERR           : out std_logic;
+            Q_DATA          : out std_logic_vector(DATA_BITS-1 downto 0);
+            S_CLR           : in  std_logic;
+            S_START         : in  std_logic;
+            S_TAG           : in  std_logic_vector(TAG_HI downto TAG_LO);
+            S_DONE          : in  std_logic;
+            S_ERR           : in  std_logic;
+            S_ADDR          : in  std_logic_vector(ADDR_BITS  -1 downto 0);
+            S_DATA          : in  std_logic_vector(DATA_BITS  -1 downto 0);
+            S_BEN           : in  std_logic_vector(DATA_BITS/8-1 downto 0);
+            S_WE            : in  std_logic
         );
     end component;
     -------------------------------------------------------------------------------
@@ -360,36 +362,38 @@ begin
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
-        U: MMU_TLB                                   -- 
-            generic map (                            -- 
-                TAG_HI      => LV(i).TAG_HI        , -- 
-                TAG_LO      => LV(i).TAG_LO        , -- 
-                TAG_SETS    => LV(i).TAG_SETS      , -- 
-                TAG_WAYS    => LV(i).TAG_WAYS      , -- 
-                DATA_BITS   => DATA_BITS           , -- 
-                ADDR_BITS   => PTR_BITS            , -- 
-                SEL_SDPRAM  => SEL_SDPRAM            -- 
-            )                                        -- 
-            port map (                               -- 
-                CLK         => CLK                 , -- In  :
-                RST         => RST                 , -- In  :
-                CLR         => CLR                 , -- In  :
-                Q_TAG       => q_tag               , -- In  :
-                Q_SET       => tlb_query_set       , -- In  :
-                Q_HIT       => tlb_query_hit  (i)  , -- Out :
-                Q_ERR       => tlb_query_error(i)  , -- Out :
-                Q_DATA      => tlb_query_data (i)  , -- Out :
-                S_CLR       => reset_regs          , -- In  :
-                S_START     => tlb_fetch_start(i)  , -- In  :
-                S_TAG       => s_tag               , -- In  :
-                S_DONE      => tlb_fetch_done (i)  , -- In  :
-                S_ERR       => tlb_fetch_error(i)  , -- In  :
-                S_ADDR      => F_BUF_PTR           , -- In  :
-                S_DATA      => F_BUF_DATA          , -- In  :
-                S_BEN       => F_BUF_BEN           , -- In  :
-                S_WE        => tlb_fetch_wen  (i)    -- In  :
-            );
-    end generate;
+        U: MMU_TLB                                       -- 
+            generic map (                                -- 
+                TAG_HI          => LV(i).TAG_HI        , -- 
+                TAG_LO          => LV(i).TAG_LO        , -- 
+                TAG_SETS        => LV(i).TAG_SETS      , -- 
+                TAG_WAYS        => LV(i).TAG_WAYS      , -- 
+                DATA_BITS       => DATA_BITS           , -- 
+                ADDR_BITS       => PTR_BITS            , --
+                NO_KEEP_DATA    => i                   , --
+                SEL_SDPRAM      => SEL_SDPRAM            -- 
+            )                                            -- 
+            port map (                                   -- 
+                CLK             => CLK                 , -- In  :
+                RST             => RST                 , -- In  :
+                CLR             => CLR                 , -- In  :
+                Q_TAG           => q_tag               , -- In  :
+                Q_SET_LRU       => tlb_query_set       , -- In  :
+                Q_KEEP_DATA     => QUERY_REQ           , -- In  :
+                Q_HIT           => tlb_query_hit  (i)  , -- Out :
+                Q_ERR           => tlb_query_error(i)  , -- Out :
+                Q_DATA          => tlb_query_data (i)  , -- Out :
+                S_CLR           => reset_regs          , -- In  :
+                S_START         => tlb_fetch_start(i)  , -- In  :
+                S_TAG           => s_tag               , -- In  :
+                S_DONE          => tlb_fetch_done (i)  , -- In  :
+                S_ERR           => tlb_fetch_error(i)  , -- In  :
+                S_ADDR          => F_BUF_PTR           , -- In  :
+                S_DATA          => F_BUF_DATA          , -- In  :
+                S_BEN           => F_BUF_BEN           , -- In  :
+                S_WE            => tlb_fetch_wen  (i)    -- In  :
+            );                                           -- 
+    end generate;                                        -- 
     -------------------------------------------------------------------------------
     -- FETCH STATE MACHINE
     -------------------------------------------------------------------------------

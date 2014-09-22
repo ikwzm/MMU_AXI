@@ -2,7 +2,7 @@
 --!     @file    mmu_tlb.vhd
 --!     @brief   MMU Translation-Lookaside-Buffer 
 --!     @version 1.0.0
---!     @date    2014/9/14
+--!     @date    2014/9/22
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
@@ -41,32 +41,34 @@ use     ieee.std_logic_1164.all;
 -----------------------------------------------------------------------------------
 entity  MMU_TLB is
     generic (
-        TAG_HI      : integer := 32;
-        TAG_LO      : integer := 12;
-        TAG_SETS    : integer :=  4;
-        TAG_WAYS    : integer :=  0;
-        DATA_BITS   : integer := 32;
-        ADDR_BITS   : integer :=  4;
-        SEL_SDPRAM  : integer :=  0
+        TAG_HI          : integer := 32;
+        TAG_LO          : integer := 12;
+        TAG_SETS        : integer :=  4;
+        TAG_WAYS        : integer :=  0;
+        DATA_BITS       : integer := 32;
+        ADDR_BITS       : integer :=  4;
+        NO_KEEP_DATA    : integer :=  0;
+        SEL_SDPRAM      : integer :=  0
     );
     port (
-        CLK         : in  std_logic; 
-        RST         : in  std_logic;
-        CLR         : in  std_logic;
-        Q_TAG       : in  std_logic_vector(TAG_HI downto TAG_LO);
-        Q_SET       : in  std_logic;
-        Q_HIT       : out std_logic;
-        Q_ERR       : out std_logic;
-        Q_DATA      : out std_logic_vector(DATA_BITS-1 downto 0);
-        S_CLR       : in  std_logic;
-        S_START     : in  std_logic;
-        S_TAG       : in  std_logic_vector(TAG_HI downto TAG_LO);
-        S_DONE      : in  std_logic;
-        S_ERR       : in  std_logic;
-        S_ADDR      : in  std_logic_vector(ADDR_BITS  -1 downto 0);
-        S_DATA      : in  std_logic_vector(DATA_BITS  -1 downto 0);
-        S_BEN       : in  std_logic_vector(DATA_BITS/8-1 downto 0);
-        S_WE        : in  std_logic
+        CLK             : in  std_logic; 
+        RST             : in  std_logic;
+        CLR             : in  std_logic;
+        Q_TAG           : in  std_logic_vector(TAG_HI downto TAG_LO);
+        Q_SET_LRU       : in  std_logic;
+        Q_KEEP_DATA     : in  std_logic;
+        Q_HIT           : out std_logic;
+        Q_ERR           : out std_logic;
+        Q_DATA          : out std_logic_vector(DATA_BITS-1 downto 0);
+        S_CLR           : in  std_logic;
+        S_START         : in  std_logic;
+        S_TAG           : in  std_logic_vector(TAG_HI downto TAG_LO);
+        S_DONE          : in  std_logic;
+        S_ERR           : in  std_logic;
+        S_ADDR          : in  std_logic_vector(ADDR_BITS  -1 downto 0);
+        S_DATA          : in  std_logic_vector(DATA_BITS  -1 downto 0);
+        S_BEN           : in  std_logic_vector(DATA_BITS/8-1 downto 0);
+        S_WE            : in  std_logic
     );
 end MMU_TLB;
 -----------------------------------------------------------------------------------
@@ -127,9 +129,10 @@ architecture RTL of MMU_TLB is
     -------------------------------------------------------------------------------
     -- 
     -------------------------------------------------------------------------------
-    signal    tag_val_hit       :  std_logic_vector(TAG_SETS-1 downto 0);
-    signal    tag_val_err       :  std_logic_vector(TAG_SETS-1 downto 0);
-    signal    tag_hit           :  std_logic_vector(TAG_SETS-1 downto 0);
+    signal    tag_hit_vec       :  std_logic_vector(TAG_SETS-1 downto 0);
+    signal    tag_err_vec       :  std_logic_vector(TAG_SETS-1 downto 0);
+    signal    tag_set_sel       :  std_logic_vector(TAG_SETS-1 downto 0);
+    signal    tag_hit           :  std_logic;
     signal    tag_load          :  std_logic_vector(TAG_SETS-1 downto 0);
     signal    lru_load          :  std_logic_vector(TAG_SETS-1 downto 0);
     signal    lru_select        :  std_logic_vector(TAG_SETS-1 downto 0);
@@ -149,7 +152,6 @@ architecture RTL of MMU_TLB is
             O_SEL       : out std_logic_vector(NUM_SETS-1 downto 0)
         );
     end component;
-    
 begin
     -------------------------------------------------------------------------------
     -- Tag Data and Status
@@ -182,31 +184,28 @@ begin
             end if;
         end process;
         data_hit   <= (Q_TAG(TAG_DATA_TYPE'range) = data);
-        tag_val_hit(i) <= '1' when (data_hit and state(0) = '1') else '0';
-        tag_val_err(i) <= '1' when (data_hit and state(1) = '1') else '0';
+        tag_hit_vec(i) <= '1' when (data_hit and state(0) = '1') else '0';
+        tag_err_vec(i) <= '1' when (data_hit and state(1) = '1') else '0';
         tag_load(i)    <= '1' when (state(2) = '1') else '0';
     end generate;
     -------------------------------------------------------------------------------
     -- Tag Hit Priority Encoding
     -------------------------------------------------------------------------------
-    process (tag_val_hit, tag_val_err)
+    process (tag_hit_vec)
         variable valid   : std_logic;
         variable one_hot : std_logic_vector(TAG_SETS-1 downto 0);
     begin
         Priority_Encode_To_OneHot_Simply(
-            High_to_Low => FALSE      , -- In : tag_val_hit(0)の方が優先順位が高い.
-            Data        => tag_val_hit, -- In : 入力データ.
+            High_to_Low => FALSE      , -- In : tag_hit_vec(0)の方が優先順位が高い.
+            Data        => tag_hit_vec, -- In : 入力データ.
             Output      => one_hot    , -- Out: 出力変数.
-            Valid       => valid        -- Out: tag_val_hit のどれかが'1'の時に真.
+            Valid       => valid        -- Out: tag_hit_vec のどれかが'1'の時に真.
         );
-        tag_hit <= one_hot;
-        Q_HIT   <= valid;
-        if (or_reduce(one_hot and tag_val_err) = '1') then
-            Q_ERR <= '1';
-        else
-            Q_ERR <= '0';
-        end if;
+        tag_set_sel <= one_hot;
+        tag_hit     <= valid;
     end process;
+    Q_HIT <= tag_hit;
+    Q_ERR <= or_reduce(tag_set_sel and tag_err_vec);
     -------------------------------------------------------------------------------
     -- TLBのセットから最も過去に選択したエントリを選択する.
     -------------------------------------------------------------------------------
@@ -218,7 +217,7 @@ begin
             Q_SEL       => open        , -- Out :
             O_SEL       => lru_select    -- Out :
         );
-    lru_load <= tag_hit when (Q_SET = '1') else (others => '0');
+    lru_load <= tag_set_sel when (Q_SET_LRU = '1') else (others => '0');
     -------------------------------------------------------------------------------
     -- TLB DATA を RAMに保持する場合...
     -------------------------------------------------------------------------------
@@ -227,6 +226,7 @@ begin
         constant  WAYS_WIDTH :  integer := TAG_WAYS;
         constant  SETS_WIDTH :  integer := calc_width(TAG_SETS);
         constant  RAM_DEPTH  :  integer := DATA_WIDTH + WAYS_WIDTH + SETS_WIDTH;
+        signal    ram_qaddr  :  std_logic_vector(RAM_DEPTH downto DATA_WIDTH);
         signal    ram_raddr  :  std_logic_vector(RAM_DEPTH downto DATA_WIDTH);
         signal    ram_waddr  :  std_logic_vector(RAM_DEPTH downto DATA_WIDTH);
         signal    ram_rdata  :  std_logic_vector(2**(DATA_WIDTH  )-1 downto 0);
@@ -234,7 +234,7 @@ begin
         signal    ram_we     :  std_logic_vector(2**(DATA_WIDTH-3)-1 downto 0);
     begin
         ---------------------------------------------------------------------------
-        --
+        -- ram_waddr/ram_we
         ---------------------------------------------------------------------------
         process (tag_load, S_ADDR, S_BEN, S_WE)
             variable valid : std_logic;
@@ -266,9 +266,9 @@ begin
             end loop;
         end process;
         ---------------------------------------------------------------------------
-        --
+        -- ram_raddr
         ---------------------------------------------------------------------------
-        process (tag_val_hit, Q_TAG)
+        process (tag_hit_vec, Q_TAG, Q_KEEP_DATA, ram_qaddr)
             variable valid : std_logic;
             variable addr  : std_logic_vector(SETS_WIDTH+WAYS_WIDTH-1 downto 0);
         begin
@@ -281,17 +281,36 @@ begin
                 Priority_Encode_To_Binary_Simply(
                     High_to_Low => FALSE      ,
                     Binary_Len  => SETS_WIDTH ,
-                    Data        => tag_val_hit,
+                    Data        => tag_hit_vec,
                     Output      => addr(addr'high downto addr'high-(SETS_WIDTH-1)),
                     Valid       => valid
                 );
             else
                 valid := '1';
             end if;
-            ram_raddr <= addr;
+            if (NO_KEEP_DATA /= 0) or
+               (NO_KEEP_DATA  = 0 and Q_KEEP_DATA = '1' and valid = '1') then
+                ram_raddr <= addr;
+            else
+                ram_raddr <= ram_qaddr;
+            end if;
         end process;
         ---------------------------------------------------------------------------
-        --
+        -- ram_qaddr
+        ---------------------------------------------------------------------------
+        process (CLK, RST) begin
+            if (RST = '1') then
+                    ram_qaddr <= (others => '0');
+            elsif (CLK'event and CLK = '1') then
+                if (CLR = '1') then
+                    ram_qaddr <= (others => '0');
+                else
+                    ram_qaddr <= ram_raddr;
+                end if;
+            end if;
+        end process;
+        ---------------------------------------------------------------------------
+        -- ram_wdata
         ---------------------------------------------------------------------------
         process (S_DATA) begin
             for i in ram_wdata'range loop
@@ -305,15 +324,15 @@ begin
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
-        RAMS:  SDPRAM 
-            generic map (
-                DEPTH   => RAM_DEPTH   ,
-                RWIDTH  => DATA_WIDTH  ,
-                WWIDTH  => DATA_WIDTH  ,
-                WEBIT   => DATA_WIDTH-3,
-                ID      => 0
-            )
-            port map (
+        RAMS:  SDPRAM                    -- 
+            generic map (                -- 
+                DEPTH   => RAM_DEPTH   , -- 
+                RWIDTH  => DATA_WIDTH  , --
+                WWIDTH  => DATA_WIDTH  , --
+                WEBIT   => DATA_WIDTH-3, --
+                ID      => 0             -- 
+            )                            -- 
+            port map (                   -- 
                 WCLK    => CLK         , -- In  :
                 WE      => ram_we      , -- In  :
                 WADDR   => ram_waddr   , -- In  :
@@ -321,7 +340,7 @@ begin
                 RCLK    => CLK         , -- In  :
                 RADDR   => ram_raddr   , -- In  :
                 RDATA   => ram_rdata     -- Out :
-            );
+            );                           -- 
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
@@ -351,6 +370,23 @@ begin
             end loop;
             return result;
         end function;
+        function  to_way_select(ADDR:std_logic_vector) return std_logic_vector is
+            alias    pos : std_logic_vector(ADDR'length-1 downto 0) is ADDR;
+            variable sel : std_logic_vector(0 to 2**TAG_WAYS-1);
+        begin
+            if (TAG_WAYS > 0) then
+                for i in sel'range loop
+                    if (i = unsigned(pos(TAG_WAYS-1 downto 0))) then
+                        sel(i) := '1';
+                    else
+                        sel(i) := '0';
+                    end if;
+                end loop;
+            else
+                sel(0) := '1';
+            end if;
+            return sel;
+        end function;
     begin
         ---------------------------------------------------------------------------
         -- data_regs
@@ -364,24 +400,14 @@ begin
                 if (CLR = '1') then
                     data_regs <= (others => (others => (others => '0')));
                 elsif (S_WE = '1') then
-                    if (TAG_WAYS = 0) then
-                        way_load(0) := '1';
-                    else
+                    way_load := to_way_select(S_ADDR(S_ADDR'high downto ADDR_WAYS_LO));
+                    for set_pos in tag_load'range loop
                         for way_pos in way_load'range loop
-                            if (way_pos = unsigned(S_ADDR(ADDR_WAYS_LO+TAG_WAYS-1 downto ADDR_WAYS_LO))) then
-                                way_load(way_pos) := '1';
-                            else
-                                way_load(way_pos) := '0';
-                            end if;
-                        end loop;
-                    end if;
-                    for tag_pos in 0 to TAG_SETS-1 loop
-                        for way_pos in 0 to 2**TAG_WAYS-1 loop
                             for i in 0 to DATA_BITS-1 loop
-                                if (tag_load(tag_pos) = '1' and
+                                if (tag_load(set_pos) = '1' and
                                     way_load(way_pos) = '1' and
                                     S_BEN(i/8)        = '1') then
-                                    data_regs(tag_pos)(way_pos)(i) <= S_DATA(i);
+                                    data_regs(set_pos)(way_pos)(i) <= S_DATA(i);
                                 end if;
                             end loop;
                         end loop;
@@ -402,26 +428,17 @@ begin
             elsif (CLK'event and CLK = '1') then
                 if (CLR = '1') then
                     Q_DATA <= (others => '0');
-                else
-                    if (TAG_WAYS = 0) then
-                        way_select(0) := '1';
-                    else
-                        for way_pos in way_select'range loop
-                            if (way_pos = unsigned(Q_TAG(TAG_LO+TAG_WAYS-1 downto TAG_LO))) then
-                                way_select(way_pos) := '1';
-                            else
-                                way_select(way_pos) := '0';
-                            end if;
-                        end loop;
-                    end if;
-                    for tag_pos in set_data'range loop
+                elsif (NO_KEEP_DATA /= 0) or
+                      (NO_KEEP_DATA  = 0 and Q_KEEP_DATA = '1' and tag_hit = '1') then
+                    way_select := to_way_select(Q_TAG(Q_TAG'high downto TAG_LO));
+                    for set_pos in set_data'range loop
                         for way_pos in way_data'range loop
-                            way_data(way_pos) := data_regs(tag_pos)(way_pos);
+                            way_data(way_pos) := data_regs(set_pos)(way_pos);
                         end loop;
-                        set_data(tag_pos) := select_data(way_data, way_select);
+                        set_data(set_pos) := select_data(way_data, way_select);
                     end loop;
                     if (TAG_SETS > 1) then
-                        Q_DATA <= select_data(set_data, tag_hit);
+                        Q_DATA <= select_data(set_data, tag_set_sel);
                     else
                         Q_DATA <= set_data(0);
                     end if;
