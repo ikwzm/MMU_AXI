@@ -5,12 +5,16 @@ SRC_PATH             = ../../src
 GHDL       = ghdl
 GHDLFLAGS  = --mb-comments -P$(DUMMY_PLUG_WORK_PATH) -P$(PIPEWORK_WORK_PATH)
 
-COMPONENTS = mmu_core    \
+COMPONENTS = mmu_axi     \
+             mmu_core    \
              mmu_tlb     \
              mmu_tlb_lru \
              $(END_LIST)
 
 DUT : $(addsuffix .o,$(COMPONENTS))
+
+mmu_axi.o    : $(SRC_PATH)/main/vhdl/mmu_axi.vhd 
+	 $(GHDL) -a $(GHDLFLAGS) --work=WORK $<
 
 mmu_core.o    : $(SRC_PATH)/main/vhdl/mmu_core.vhd 
 	 $(GHDL) -a $(GHDLFLAGS) --work=WORK $<

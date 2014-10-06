@@ -2,7 +2,7 @@
 --!     @file    mmu_core.vhd
 --!     @brief   MMU Core Module
 --!     @version 1.0.0
---!     @date    2014/9/22
+--!     @date    2014/10/6
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
@@ -41,59 +41,64 @@ use     ieee.std_logic_1164.all;
 -----------------------------------------------------------------------------------
 entity  MMU_CORE is
     generic (
-        PAGE_SIZE       : integer := 12;
-        DESC_SIZE       : integer :=  2;
-        QUERY_ADDR_BITS : integer := 32;
-        FETCH_ADDR_BITS : integer := 32;
-        FETCH_SIZE_BITS : integer := 12;
-        FETCH_PTR_BITS  : integer :=  8;
-        MODE_BITS       : integer := 32;
-        PREF_BITS       : integer := 32;
-        USE_PREFETCH    : integer :=  1;
-        SEL_SDPRAM      : integer :=  0
+        PAGE_SIZE           : integer := 12;
+        DESC_SIZE           : integer :=  2;
+        TLB_TAG_SETS        : integer :=  2;
+        TLB_TAG_WAYS        : integer :=  3;
+        QUERY_ADDR_BITS     : integer := 32;
+        FETCH_ADDR_BITS     : integer := 32;
+        FETCH_SIZE_BITS     : integer := 12;
+        FETCH_PTR_BITS      : integer :=  8;
+        MODE_BITS           : integer := 32;
+        PREF_BITS           : integer := 32;
+        USE_PREFETCH        : integer :=  1;
+        SEL_SDPRAM          : integer :=  0
     );
     port (
-        CLK             : in  std_logic; 
-        RST             : in  std_logic;
-        CLR             : in  std_logic;
-        RESET_L         : in  std_logic;
-        RESET_D         : in  std_logic;
-        RESET_Q         : out std_logic;
-        DESC_L          : in  std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
-        DESC_D          : in  std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
-        DESC_Q          : out std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
-        PREF_L          : in  std_logic_vector(PREF_BITS       -1 downto 0);
-        PREF_D          : in  std_logic_vector(PREF_BITS       -1 downto 0);
-        PREF_Q          : out std_logic_vector(PREF_BITS       -1 downto 0);
-        MODE_L          : in  std_logic_vector(MODE_BITS       -1 downto 0);
-        MODE_D          : in  std_logic_vector(MODE_BITS       -1 downto 0);
-        MODE_Q          : out std_logic_vector(MODE_BITS       -1 downto 0);
-        QUERY_REQ       : in  std_logic;
-        QUERY_ADDR      : in  std_logic_vector(QUERY_ADDR_BITS -1 downto 0);
-        QUERY_ACK       : out std_logic;
-        QUERY_ERROR     : out std_logic;
-        QUERY_DESC      : out std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
-        FETCH_REQ_VALID : out std_logic;
-        FETCH_REQ_FIRST : out std_logic;
-        FETCH_REQ_LAST  : out std_logic;
-        FETCH_REQ_ADDR  : out std_logic_vector(FETCH_ADDR_BITS -1 downto 0);
-        FETCH_REQ_SIZE  : out std_logic_vector(FETCH_SIZE_BITS -1 downto 0);
-        FETCH_REQ_PTR   : out std_logic_vector(FETCH_PTR_BITS  -1 downto 0);
-        FETCH_REQ_READY : in  std_logic;
-        FETCH_ACK_VALID : in  std_logic;
-        FETCH_ACK_ERROR : in  std_logic;
-        FETCH_ACK_NEXT  : in  std_logic;
-        FETCH_ACK_LAST  : in  std_logic;
-        FETCH_ACK_STOP  : in  std_logic;
-        FETCH_ACK_NONE  : in  std_logic;
-        FETCH_ACK_SIZE  : in  std_logic_vector(FETCH_SIZE_BITS -1 downto 0);
-        FETCH_XFER_BUSY : in  std_logic;
-        FETCH_XFER_ERROR: in  std_logic := '0';
-        FETCH_XFER_DONE : in  std_logic;
-        FETCH_BUF_DATA  : in  std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
-        FETCH_BUF_BEN   : in  std_logic_vector(2**(DESC_SIZE  )-1 downto 0);
-        FETCH_BUF_PTR   : in  std_logic_vector(FETCH_PTR_BITS  -1 downto 0);
-        FETCH_BUF_WE    : in  std_logic
+        CLK                 : in  std_logic; 
+        RST                 : in  std_logic;
+        CLR                 : in  std_logic;
+        RESET_L             : in  std_logic;
+        RESET_D             : in  std_logic;
+        RESET_Q             : out std_logic;
+        START_L             : in  std_logic;
+        START_D             : in  std_logic;
+        START_Q             : out std_logic;
+        DESC_L              : in  std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
+        DESC_D              : in  std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
+        DESC_Q              : out std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
+        PREF_L              : in  std_logic_vector(PREF_BITS       -1 downto 0);
+        PREF_D              : in  std_logic_vector(PREF_BITS       -1 downto 0);
+        PREF_Q              : out std_logic_vector(PREF_BITS       -1 downto 0);
+        MODE_L              : in  std_logic_vector(MODE_BITS       -1 downto 0);
+        MODE_D              : in  std_logic_vector(MODE_BITS       -1 downto 0);
+        MODE_Q              : out std_logic_vector(MODE_BITS       -1 downto 0);
+        QUERY_REQ           : in  std_logic;
+        QUERY_ADDR          : in  std_logic_vector(QUERY_ADDR_BITS -1 downto 0);
+        QUERY_ACK           : out std_logic;
+        QUERY_ERROR         : out std_logic;
+        QUERY_DESC          : out std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
+        FETCH_REQ_VALID     : out std_logic;
+        FETCH_REQ_FIRST     : out std_logic;
+        FETCH_REQ_LAST      : out std_logic;
+        FETCH_REQ_ADDR      : out std_logic_vector(FETCH_ADDR_BITS -1 downto 0);
+        FETCH_REQ_SIZE      : out std_logic_vector(FETCH_SIZE_BITS -1 downto 0);
+        FETCH_REQ_PTR       : out std_logic_vector(FETCH_PTR_BITS  -1 downto 0);
+        FETCH_REQ_READY     : in  std_logic;
+        FETCH_ACK_VALID     : in  std_logic;
+        FETCH_ACK_ERROR     : in  std_logic;
+        FETCH_ACK_NEXT      : in  std_logic;
+        FETCH_ACK_LAST      : in  std_logic;
+        FETCH_ACK_STOP      : in  std_logic;
+        FETCH_ACK_NONE      : in  std_logic;
+        FETCH_ACK_SIZE      : in  std_logic_vector(FETCH_SIZE_BITS -1 downto 0);
+        FETCH_XFER_BUSY     : in  std_logic;
+        FETCH_XFER_ERROR    : in  std_logic := '0';
+        FETCH_XFER_DONE     : in  std_logic;
+        FETCH_BUF_DATA      : in  std_logic_vector(2**(DESC_SIZE+3)-1 downto 0);
+        FETCH_BUF_BEN       : in  std_logic_vector(2**(DESC_SIZE  )-1 downto 0);
+        FETCH_BUF_PTR       : in  std_logic_vector(FETCH_PTR_BITS  -1 downto 0);
+        FETCH_BUF_WE        : in  std_logic
     );
 end MMU_CORE;
 -----------------------------------------------------------------------------------
@@ -217,8 +222,8 @@ architecture RTL of MMU_CORE is
     end record;
     type      LEVEL_INFO_VECTOR is array(integer range <>) of LEVEL_INFO_TYPE;
     constant  LV                :  LEVEL_INFO_VECTOR(0 to LEVEL) := (
-                                       0 => (TAG_SETS  => 2,  -- 2sets
-                                             TAG_WAYS  => 3,  -- 8ways = 2**3
+                                       0 => (TAG_SETS  => TLB_TAG_SETS,
+                                             TAG_WAYS  => TLB_TAG_WAYS,
                                              TAG_FORM  => TAG_FORMAT(QUERY_ADDR'high, PAGE_SIZE+0*PAGE_INDEX_BITS),
                                              DESC_FORM => DESC_FORMAT
                                        ),
@@ -277,9 +282,7 @@ begin
             else
                 case query_state is
                     when QUERY_IDLE =>
-                        if     (QUERY_REQ = '1') then
-                                query_state <= QUERY_DONE;
-                        elsif (start_bit = '1') then
+                        if (start_bit = '1') then
                             if (USE_PREFETCH /= 0) then
                                 query_state <= QUERY_PREF;
                             else
@@ -295,10 +298,10 @@ begin
                             else
                                 query_state <= QUERY_DONE;
                             end if;
-                        elsif (start_bit = '1') then
-                                query_state <= QUERY_IDLE;
+                        elsif (start_bit = '0') then
+                            query_state <= QUERY_IDLE;
                         else
-                                query_state <= QUERY_RUN;
+                            query_state <= QUERY_RUN;
                         end if;
                     when QUERY_DONE =>
                         if    (start_bit = '0') then
@@ -325,24 +328,16 @@ begin
     -------------------------------------------------------------------------------
     -- QUERY_ACK/QUERY_ERR/QUERY_DATA
     -------------------------------------------------------------------------------
-    process (CLK, RST) begin
-        if (RST = '1') then
-                QUERY_ACK   <= '0';
-                QUERY_ERROR <= '0';
-        elsif (CLK'event and CLK = '1') then
-            if (CLR = '1') then
-                QUERY_ACK   <= '0';
-                QUERY_ERROR <= '0';
-            elsif (query_state = QUERY_RUN and QUERY_REQ = '1' and tlb_query_hit(0) = '1') then
-                QUERY_ACK   <= '1';
-                QUERY_ERROR <= tlb_query_error(0);
-            elsif (query_state = QUERY_IDLE    and QUERY_REQ = '1') then
-                QUERY_ACK   <= '1';
-                QUERY_ERROR <= '1';
-            else
-                QUERY_ACK   <= '0';
-                QUERY_ERROR <= '0';
-            end if;
+    process (query_state, QUERY_REQ, tlb_query_hit, tlb_query_error) begin
+        if    (query_state = QUERY_RUN  and QUERY_REQ = '1' and tlb_query_hit(0) = '1') then
+            QUERY_ACK   <= '1';
+            QUERY_ERROR <= tlb_query_error(0);
+        elsif (query_state = QUERY_IDLE and QUERY_REQ = '1') then
+            QUERY_ACK   <= '1';
+            QUERY_ERROR <= '1';
+        else
+            QUERY_ACK   <= '0';
+            QUERY_ERROR <= '0';
         end if;
     end process;
     QUERY_DESC <= tlb_query_data(0);
@@ -404,7 +399,7 @@ begin
         end process;
         tlb_query_tag <= QUERY_ADDR when (query_state = QUERY_RUN) else prefetch_addr;
         tlb_query_set <= '1'        when (query_state = QUERY_RUN) else '0';
-        PREF_Q  <= prefetch_addr;
+        PREF_Q  <= prefetch_regs;
     end generate;
     -------------------------------------------------------------------------------
     -- プリフェッチを使わない場合...
@@ -461,6 +456,21 @@ begin
                 S_WE            => tlb_fetch_wen  (i)        -- In  :
             );                                               -- 
     end generate;                                            -- 
+    -------------------------------------------------------------------------------
+    -- start_bit
+    -------------------------------------------------------------------------------
+    START: process (CLK, RST) begin
+        if (RST = '1') then
+                start_bit <= '0';
+        elsif (CLK'event and CLK = '1') then
+            if (CLR = '1') then
+                start_bit <= '0';
+            elsif (START_L = '1') then
+                start_bit <= START_D;
+            end if;
+        end if;
+    end process;
+    START_Q <= start_bit;                    
     -------------------------------------------------------------------------------
     -- desc_regs
     -------------------------------------------------------------------------------
