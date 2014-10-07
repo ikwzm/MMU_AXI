@@ -47,7 +47,9 @@ entity  MMU_AXI is
         DESC_SIZE       : integer :=  2;
         TLB_TAG_SETS    : integer :=  2;
         TLB_TAG_WAYS    : integer :=  3;
-        M_QUEUE_SIZE    : integer :=  4;
+        M_QUEUE_SIZE    : integer :=  0;
+        M_AR_QUEUE_SIZE : integer :=  1;
+        M_AW_QUEUE_SIZE : integer :=  1;
         S_ADDR_WIDTH    : integer := 32;
         S_ALEN_WIDTH    : integer :=  8;
         S_ALOCK_WIDTH   : integer :=  1;
@@ -457,6 +459,14 @@ architecture RTL of MMU_AXI is
     signal   fetch_buf_ben      :  std_logic_vector(DESC_BITS/8    -1 downto 0);
     signal   fetch_buf_wdata    :  std_logic_vector(DESC_BITS      -1 downto 0);
     signal   fetch_buf_wptr     :  std_logic_vector(FETCH_SIZE_BITS-2 downto 0);
+    -------------------------------------------------------------------------------
+    -- 
+    -------------------------------------------------------------------------------
+    signal   rd_valid           :  std_logic;
+    signal   rd_ready           :  std_logic;
+    signal   rd_error           :  std_logic;
+    signal   wd_valid           :  std_logic;
+    signal   wd_ready           :  std_logic;
     -------------------------------------------------------------------------------
     -- MMU_CORE Component.
     -------------------------------------------------------------------------------
@@ -888,9 +898,19 @@ begin
         signal    t_data       :  std_logic_vector(Q_HI downto Q_LO);
         signal    t_valid      :  std_logic;
         signal    t_ready      :  std_logic;
-        signal    m_data       :  std_logic_vector(Q_HI downto Q_LO);
-        signal    m_valid      :  std_logic;
-        signal    m_ready      :  std_logic;
+        signal    t_arvalid    :  std_logic;
+        signal    t_arready    :  std_logic;
+        signal    t_awvalid    :  std_logic;
+        signal    t_awready    :  std_logic;
+        signal    q_data       :  std_logic_vector(Q_HI downto Q_LO);
+        signal    q_valid      :  std_logic;
+        signal    q_ready      :  std_logic;
+        signal    q_arvalid    :  std_logic;
+        signal    q_arready    :  std_logic;
+        signal    q_awvalid    :  std_logic;
+        signal    q_awready    :  std_logic;
+        signal    m_ar         :  std_logic_vector(Q_HI downto Q_LO);
+        signal    m_aw         :  std_logic_vector(Q_HI downto Q_LO);
     begin
         ---------------------------------------------------------------------------
         -- MMU CORE
@@ -1140,56 +1160,135 @@ begin
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
-        QUEUE: QUEUE_REGISTER                -- 
-            generic map (                    -- 
-                QUEUE_SIZE  => M_QUEUE_SIZE, --
-                DATA_BITS   => Q_BITS      , --
-                LOWPOWER    => 0             -- 
-            )                                -- 
-            port map (                       -- 
-                CLK         => C_CLK       , -- In  :
-                RST         => RST         , -- In  :
-                CLR         => CLR         , -- In  :
-                I_DATA      => t_data      , -- In  :
-                I_VAL       => t_valid     , -- In  :
-                I_RDY       => t_ready     , -- Out :
-                O_DATA      => open        , -- Out :
-                O_VAL       => open        , -- Out :
-                Q_DATA      => m_data      , -- Out :
-                Q_VAL(0)    => m_valid     , -- Out :
-                Q_RDY       => m_ready       -- In  :
+        M_QUEUE: QUEUE_REGISTER                  -- 
+            generic map (                        -- 
+                QUEUE_SIZE  => M_QUEUE_SIZE    , --
+                DATA_BITS   => Q_BITS          , --
+                LOWPOWER    => 0                 -- 
+            )                                    -- 
+            port map (                           -- 
+                CLK         => C_CLK           , -- In  :
+                RST         => RST             , -- In  :
+                CLR         => CLR             , -- In  :
+                I_DATA      => t_data          , -- In  :
+                I_VAL       => t_valid         , -- In  :
+                I_RDY       => t_ready         , -- Out :
+                O_DATA      => open            , -- Out :
+                O_VAL       => open            , -- Out :
+                Q_DATA      => q_data          , -- Out :
+                Q_VAL(0)    => q_valid         , -- Out :
+                Q_RDY       => q_ready           -- In  :
             );
-        m_ready    <= '1' when (m_data(Q_AROK_POS) = '1' and M_ARREADY = '1') or
-                               (m_data(Q_AWOK_POS) = '1' and M_AWREADY = '1') else '0';
+        q_ready <= '1' when (q_arready = '1' or q_awready = '1') else '0';
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
-        M_ARID     <= m_data(Q_AID_HI     downto Q_AID_LO    );
-        M_ARADDR   <= m_data(Q_AADDR_HI   downto Q_AADDR_LO  );
-        M_ARUSER   <= m_data(Q_AUSER_HI   downto Q_AUSER_LO  );
-        M_ARLEN    <= m_data(Q_ALEN_HI    downto Q_ALEN_LO   );
-        M_ARSIZE   <= m_data(Q_ASIZE_HI   downto Q_ASIZE_LO  );
-        M_ARBURST  <= m_data(Q_ABURST_HI  downto Q_ABURST_LO );
-        M_ARCACHE  <= m_data(Q_ACACHE_HI  downto Q_ACACHE_LO );
-        M_ARLOCK   <= m_data(Q_ALOCK_HI   downto Q_ALOCK_LO  );
-        M_ARPROT   <= m_data(Q_APROT_HI   downto Q_APROT_LO  );
-        M_ARQOS    <= m_data(Q_AQOS_HI    downto Q_AQOS_LO   );
-        M_ARREGION <= m_data(Q_AREGION_HI downto Q_AREGION_LO);
-        M_ARVALID  <= '1' when (READ_ENABLE  /= 0 and m_valid = '1' and m_data(Q_AROK_POS) = '1') else '0';
+        M_AR_ENABLE : if (READ_ENABLE /= 0) generate
+            signal  ra_ready : std_logic;            
+        begin                                       
+            q_arvalid <= '1' when (q_data(Q_AROK_POS) = '1' and q_valid  = '1' and rd_ready = '1') else '0';
+            q_arready <= '1' when (q_data(Q_AROK_POS) = '1' and ra_ready = '1' and rd_ready = '1') or
+                                  (q_data(Q_ARNG_POS) = '1' and rd_ready = '1') else '0';
+            rd_valid  <= '1' when (q_data(Q_AROK_POS) = '1' and q_valid  = '1') or
+                                  (q_data(Q_ARNG_POS) = '1' and q_valid  = '1') else '0';
+            QUEUE: QUEUE_REGISTER                    -- 
+                generic map (                        -- 
+                    QUEUE_SIZE  => M_AR_QUEUE_SIZE , --
+                    DATA_BITS   => Q_BITS          , --
+                    LOWPOWER    => 0                 -- 
+                )                                    -- 
+                port map (                           -- 
+                    CLK         => C_CLK           , -- In  :
+                    RST         => RST             , -- In  :
+                    CLR         => CLR             , -- In  :
+                    I_DATA      => q_data          , -- In  :
+                    I_VAL       => q_arvalid       , -- In  :
+                    I_RDY       => ra_ready        , -- Out :
+                    O_DATA      => open            , -- Out :
+                    O_VAL       => open            , -- Out :
+                    Q_DATA      => m_ar            , -- Out :
+                    Q_VAL(0)    => M_ARVALID       , -- Out :
+                    Q_RDY       => M_ARREADY         -- In  :
+                );
+        end generate;
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
-        M_AWID     <= m_data(Q_AID_HI     downto Q_AID_LO    );
-        M_AWADDR   <= m_data(Q_AADDR_HI   downto Q_AADDR_LO  );
-        M_AWUSER   <= m_data(Q_AUSER_HI   downto Q_AUSER_LO  );
-        M_AWLEN    <= m_data(Q_ALEN_HI    downto Q_ALEN_LO   );
-        M_AWSIZE   <= m_data(Q_ASIZE_HI   downto Q_ASIZE_LO  );
-        M_AWBURST  <= m_data(Q_ABURST_HI  downto Q_ABURST_LO );
-        M_AWCACHE  <= m_data(Q_ACACHE_HI  downto Q_ACACHE_LO );
-        M_AWLOCK   <= m_data(Q_ALOCK_HI   downto Q_ALOCK_LO  );
-        M_AWPROT   <= m_data(Q_APROT_HI   downto Q_APROT_LO  );
-        M_AWQOS    <= m_data(Q_AQOS_HI    downto Q_AQOS_LO   );
-        M_AWREGION <= m_data(Q_AREGION_HI downto Q_AREGION_LO);
-        M_AWVALID  <= '1' when (WRITE_ENABLE /= 0 and m_valid = '1' and m_data(Q_AWOK_POS) = '1') else '0';
+        M_AR_DISABLE: if (READ_ENABLE  = 0) generate
+            m_ar <= (others => '0');
+            M_ARVALID <= '0';
+            q_arvalid <= '0';
+            q_arready <= '0';
+            rd_valid  <= '0';
+        end generate;
+        ---------------------------------------------------------------------------
+        --
+        ---------------------------------------------------------------------------
+        M_ARID     <= m_ar(Q_AID_HI     downto Q_AID_LO    );
+        M_ARADDR   <= m_ar(Q_AADDR_HI   downto Q_AADDR_LO  );
+        M_ARUSER   <= m_ar(Q_AUSER_HI   downto Q_AUSER_LO  );
+        M_ARLEN    <= m_ar(Q_ALEN_HI    downto Q_ALEN_LO   );
+        M_ARSIZE   <= m_ar(Q_ASIZE_HI   downto Q_ASIZE_LO  );
+        M_ARBURST  <= m_ar(Q_ABURST_HI  downto Q_ABURST_LO );
+        M_ARCACHE  <= m_ar(Q_ACACHE_HI  downto Q_ACACHE_LO );
+        M_ARLOCK   <= m_ar(Q_ALOCK_HI   downto Q_ALOCK_LO  );
+        M_ARPROT   <= m_ar(Q_APROT_HI   downto Q_APROT_LO  );
+        M_ARQOS    <= m_ar(Q_AQOS_HI    downto Q_AQOS_LO   );
+        M_ARREGION <= m_ar(Q_AREGION_HI downto Q_AREGION_LO);
+        ---------------------------------------------------------------------------
+        --
+        ---------------------------------------------------------------------------
+        M_AW_ENABLE: if (WRITE_ENABLE /= 0) generate
+            signal  wa_ready : std_logic;
+        begin
+            q_awvalid <= '1' when (q_data(Q_AWOK_POS) = '1' and q_valid  = '1' and wd_ready = '1') else '0';
+            q_awready <= '1' when (q_data(Q_AWOK_POS) = '1' and wa_ready = '1' and wd_ready = '1') or
+                                  (q_data(Q_AWNG_POS) = '1' and wd_ready = '1') else '0';
+            wd_valid  <= '1' when (q_data(Q_AWOK_POS) = '1' and q_valid  = '1') or
+                                  (q_data(Q_AWNG_POS) = '1' and q_valid  = '1') else '0';
+            QUEUE: QUEUE_REGISTER                    -- 
+                generic map (                        -- 
+                    QUEUE_SIZE  => M_AW_QUEUE_SIZE , --
+                    DATA_BITS   => Q_BITS          , --
+                    LOWPOWER    => 0                 -- 
+                )                                    -- 
+                port map (                           -- 
+                    CLK         => C_CLK           , -- In  :
+                    RST         => RST             , -- In  :
+                    CLR         => CLR             , -- In  :
+                    I_DATA      => q_data          , -- In  :
+                    I_VAL       => q_awvalid       , -- In  :
+                    I_RDY       => wa_ready        , -- Out :
+                    O_DATA      => open            , -- Out :
+                    O_VAL       => open            , -- Out :
+                    Q_DATA      => m_aw            , -- Out :
+                    Q_VAL(0)    => M_AWVALID       , -- Out :
+                    Q_RDY       => M_AWREADY         -- In  :
+                );                                   -- 
+        end generate;
+        ---------------------------------------------------------------------------
+        --
+        ---------------------------------------------------------------------------
+        M_AW_DISABLE: if (WRITE_ENABLE  = 0) generate
+            m_aw <= (others => '0');
+            M_AWVALID <= '0';
+            q_awvalid <= '0';
+            q_awready <= '0';
+            wd_valid  <= '0';
+        end generate;
+        ---------------------------------------------------------------------------
+        --
+        ---------------------------------------------------------------------------
+        M_AWID     <= m_aw(Q_AID_HI     downto Q_AID_LO    );
+        M_AWADDR   <= m_aw(Q_AADDR_HI   downto Q_AADDR_LO  );
+        M_AWUSER   <= m_aw(Q_AUSER_HI   downto Q_AUSER_LO  );
+        M_AWLEN    <= m_aw(Q_ALEN_HI    downto Q_ALEN_LO   );
+        M_AWSIZE   <= m_aw(Q_ASIZE_HI   downto Q_ASIZE_LO  );
+        M_AWBURST  <= m_aw(Q_ABURST_HI  downto Q_ABURST_LO );
+        M_AWCACHE  <= m_aw(Q_ACACHE_HI  downto Q_ACACHE_LO );
+        M_AWLOCK   <= m_aw(Q_ALOCK_HI   downto Q_ALOCK_LO  );
+        M_AWPROT   <= m_aw(Q_APROT_HI   downto Q_APROT_LO  );
+        M_AWQOS    <= m_aw(Q_AQOS_HI    downto Q_AQOS_LO   );
+        M_AWREGION <= m_aw(Q_AREGION_HI downto Q_AREGION_LO);
     end block;
 end RTL;
