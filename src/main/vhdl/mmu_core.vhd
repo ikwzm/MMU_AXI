@@ -2,7 +2,7 @@
 --!     @file    mmu_core.vhd
 --!     @brief   MMU Core Module
 --!     @version 1.0.0
---!     @date    2014/10/6
+--!     @date    2014/10/13
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
@@ -108,7 +108,6 @@ library ieee;
 use     ieee.std_logic_1164.all;
 use     ieee.numeric_std.all;
 library PIPEWORK;
-use     PIPEWORK.PRIORITY_ENCODER_PROCEDURES.all;
 use     PIPEWORK.COMPONENTS.COUNT_UP_REGISTER;
 use     PIPEWORK.COMPONENTS.COUNT_DOWN_REGISTER;
 use     PIPEWORK.PUMP_COMPONENTS.PUMP_CONTROL_REGISTER;
@@ -160,7 +159,27 @@ architecture RTL of MMU_CORE is
         end loop;
         return result;
     end function;
+   -------------------------------------------------------------------------------
+    -- 
     -------------------------------------------------------------------------------
+    procedure priority_encode_to_onehot_simply(
+                 Data        : in  std_logic_vector;
+                 Output      : out std_logic_vector;
+                 Valid       : out std_logic
+    ) is
+        variable result      :     std_logic_vector(Data'range);
+    begin
+        for i in Data'range loop
+            if (i = Data'low) then
+                result(i) := Data(i);
+            else
+                result(i) := Data(i) and (not or_reduce(Data(i-1 downto Data'low)));
+            end if;
+        end loop;
+        Output := result;
+        Valid  := or_reduce(Data);
+    end procedure;
+     -------------------------------------------------------------------------------
     -- 
     -------------------------------------------------------------------------------
     type      BIT_FIELD_TYPE    is record
@@ -578,8 +597,7 @@ begin
             variable one_hot : std_logic_vector(LEVEL-1 downto 0);
         begin
             tlb_hit := tlb_hit_q(LEVEL downto 1);
-            Priority_Encode_To_OneHot_Simply(
-                High_to_Low => FALSE      , -- In : tag_val_hit(0)の方が優先順位が高い.
+            priority_encode_to_onehot_simply(
                 Data        => tlb_hit    , -- In : 入力データ.
                 Output      => one_hot    , -- Out: 出力変数.
                 Valid       => valid        -- Out: tag_val_hit のどれかが'1'の時に真.
@@ -590,7 +608,7 @@ begin
         --
         ---------------------------------------------------------------------------
         tran_start  <= '1' when (state = FETCH_START and tran_enable = '1') else '0';
-        tran_enable <= '1' when ((tlb_sel_d and tlb_err_q) = TLB_SEL_ALL0) else '0';
+        tran_enable <= '1' when ((tlb_sel_d and tlb_err_q(LEVEL-1 downto 0)) = TLB_SEL_ALL0) else '0';
         ---------------------------------------------------------------------------
         -- FETCH CONTROL REGISTER
         ---------------------------------------------------------------------------
@@ -636,7 +654,7 @@ begin
                 STAT_L          => "0"                 , -- In  :
                 STAT_D          => "0"                 , -- In  :
                 STAT_Q          => open                , -- Out :
-                STAT_I          => open                , -- In  :
+                STAT_I          => "0"                 , -- In  :
                 REQ_VALID       => FETCH_REQ_VALID     , -- Out :
                 REQ_FIRST       => FETCH_REQ_FIRST     , -- Out :
                 REQ_LAST        => FETCH_REQ_LAST      , -- Out :

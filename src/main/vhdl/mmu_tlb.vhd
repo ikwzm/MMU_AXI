@@ -2,7 +2,7 @@
 --!     @file    mmu_tlb.vhd
 --!     @brief   MMU Translation-Lookaside-Buffer 
 --!     @version 1.0.0
---!     @date    2014/9/22
+--!     @date    2014/10/13
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
@@ -78,7 +78,6 @@ library ieee;
 use     ieee.std_logic_1164.all;
 use     ieee.numeric_std.all;
 library PipeWork;
-use     PipeWork.PRIORITY_ENCODER_PROCEDURES.all;
 use     PipeWork.Components.SDPRAM;
 architecture RTL of MMU_TLB is
     -------------------------------------------------------------------------------
@@ -93,6 +92,47 @@ architecture RTL of MMU_TLB is
         end loop;
         return result;
     end function;
+    -------------------------------------------------------------------------------
+    -- 
+    -------------------------------------------------------------------------------
+    procedure priority_encode_to_onehot_simply(
+                 Data        : in  std_logic_vector;
+                 Output      : out std_logic_vector;
+                 Valid       : out std_logic
+    ) is
+        variable result      :     std_logic_vector(Data'range);
+    begin
+        for i in Data'range loop
+            if (i = Data'low) then
+                result(i) := Data(i);
+            else
+                result(i) := Data(i) and (not or_reduce(Data(i-1 downto Data'low)));
+            end if;
+        end loop;
+        Output := result;
+        Valid  := or_reduce(Data);
+    end procedure;
+    -------------------------------------------------------------------------------
+    -- 
+    -------------------------------------------------------------------------------
+    procedure priority_encode_to_binary_simply(
+                 Binary_Len  : in  integer;
+                 Data        : in  std_logic_vector;
+        variable Output      : out std_logic_vector;
+        variable Valid       : out std_logic
+    ) is
+        variable result      :     std_logic_vector(Binary_Len-1 downto 0);
+    begin 
+        result := (others => '0');
+        for i in Data'low to Data'high loop
+            if (Data(i) = '1') then
+                result := std_logic_vector(to_unsigned(i,result'length));
+                exit;
+            end if;
+        end loop;
+        Output := result;
+        Valid  := or_reduce(Data);
+    end procedure;
     -------------------------------------------------------------------------------
     -- 指定されたサイズを表現するのに必要なビット数を計算する関数.
     -------------------------------------------------------------------------------
@@ -195,8 +235,7 @@ begin
         variable valid   : std_logic;
         variable one_hot : std_logic_vector(TAG_SETS-1 downto 0);
     begin
-        Priority_Encode_To_OneHot_Simply(
-            High_to_Low => FALSE      , -- In : tag_hit_vec(0)の方が優先順位が高い.
+        priority_encode_to_onehot_simply(
             Data        => tag_hit_vec, -- In : 入力データ.
             Output      => one_hot    , -- Out: 出力変数.
             Valid       => valid        -- Out: tag_hit_vec のどれかが'1'の時に真.
@@ -226,9 +265,9 @@ begin
         constant  WAYS_WIDTH :  integer := TAG_WAYS;
         constant  SETS_WIDTH :  integer := calc_width(TAG_SETS);
         constant  RAM_DEPTH  :  integer := DATA_WIDTH + WAYS_WIDTH + SETS_WIDTH;
-        signal    ram_qaddr  :  std_logic_vector(RAM_DEPTH downto DATA_WIDTH);
-        signal    ram_raddr  :  std_logic_vector(RAM_DEPTH downto DATA_WIDTH);
-        signal    ram_waddr  :  std_logic_vector(RAM_DEPTH downto DATA_WIDTH);
+        signal    ram_qaddr  :  std_logic_vector(RAM_DEPTH-1 downto DATA_WIDTH);
+        signal    ram_raddr  :  std_logic_vector(RAM_DEPTH-1 downto DATA_WIDTH);
+        signal    ram_waddr  :  std_logic_vector(RAM_DEPTH-1 downto DATA_WIDTH);
         signal    ram_rdata  :  std_logic_vector(2**(DATA_WIDTH  )-1 downto 0);
         signal    ram_wdata  :  std_logic_vector(2**(DATA_WIDTH  )-1 downto 0);
         signal    ram_we     :  std_logic_vector(2**(DATA_WIDTH-3)-1 downto 0);
@@ -246,8 +285,7 @@ begin
                 end loop;
             end if;
             if (TAG_SETS > 1) then
-                Priority_Encode_To_Binary_Simply(
-                    High_to_Low => FALSE     ,
+                priority_encode_to_binary_simply(
                     Binary_Len  => SETS_WIDTH,
                     Data        => tag_load  ,
                     Output      => addr(addr'high downto addr'high-(SETS_WIDTH-1)),
@@ -278,8 +316,7 @@ begin
                 end loop;
             end if;
             if (TAG_SETS > 1) then
-                Priority_Encode_To_Binary_Simply(
-                    High_to_Low => FALSE      ,
+                priority_encode_to_binary_simply(
                     Binary_Len  => SETS_WIDTH ,
                     Data        => tag_hit_vec,
                     Output      => addr(addr'high downto addr'high-(SETS_WIDTH-1)),
@@ -352,7 +389,7 @@ begin
     DATA_REGS: if (USE_SDPRAM = FALSE) generate
         subtype   DATA_TYPE          is std_logic_vector(DATA_BITS-1 downto 0);
         type      DATA_VECTOR        is array(integer range <>) of DATA_TYPE;
-        type      DATA_REGS_TYPE     is array(0 to TAG_SETS-1) of DATA_VECTOR(0 to TAG_WAYS-1);
+        type      DATA_REGS_TYPE     is array(0 to TAG_SETS-1) of DATA_VECTOR(0 to (2**TAG_WAYS)-1);
         signal    data_regs          :  DATA_REGS_TYPE;
         function  select_data(VEC: DATA_VECTOR;SEL: std_logic_vector) return DATA_TYPE is
             variable tmp     : std_logic_vector(SEL'high downto SEL'low);

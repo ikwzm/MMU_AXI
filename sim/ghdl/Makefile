@@ -11,6 +11,24 @@ COMPONENTS = mmu_axi     \
              mmu_tlb_lru \
              $(END_LIST)
 
+
+TEST_BENCH = mmu_axi_test_bench \
+             $(END_LIST)
+
+
+all: DUT $(TEST_BENCH)
+
+clean:
+	rm -f *.o *.cf $(TEST_BENCH)
+
+
+$(TEST_BENCH) : $(addsuffix .o,$(TEST_BENCH)) $(addsuffix .snr,$(TEST_BENCH))
+	 $(GHDL) -e $(GHDLFLAGS) --work=WORK $@
+	-$(GHDL) -r $(GHDLFLAGS) --work=WORK $@
+
+mmu_axi_test_bench.o : $(SRC_PATH)/test/vhdl/mmu_axi_test_bench.vhd 
+	 $(GHDL) -a $(GHDLFLAGS) --work=WORK $<
+
 DUT : $(addsuffix .o,$(COMPONENTS))
 
 mmu_axi.o    : $(SRC_PATH)/main/vhdl/mmu_axi.vhd 
