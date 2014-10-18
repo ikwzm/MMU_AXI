@@ -906,8 +906,8 @@ begin
         signal    query_addr   :  std_logic_vector(S_ADDR_WIDTH     -1 downto 0);
         signal    query_cache  :  std_logic_vector(AXI4_ACACHE_WIDTH-1 downto 0);
         signal    query_desc   :  std_logic_vector(DESC_BITS        -1 downto 0);
-        signal    query_rd_sel :  boolean;
-        signal    query_wr_sel :  boolean;
+        signal    query_rd     :  std_logic;
+        signal    query_wr     :  std_logic;
         signal    query_req    :  std_logic;
         signal    query_ack    :  std_logic;
         signal    query_error  :  std_logic;
@@ -1030,49 +1030,49 @@ begin
             -----------------------------------------------------------------------
             process(C_CLK, RST) begin
                 if (RST = '1') then
-                        query_rd_sel <= FALSE;
-                        query_wr_sel <= FALSE;
+                        query_rd <= '0';
+                        query_wr <= '0';
                 elsif (C_CLK'event and C_CLK = '1') then
                     if (CLR = '1') then
-                        query_rd_sel <= FALSE;
-                        query_wr_sel <= FALSE;
+                        query_rd <= '0';
+                        query_wr <= '0';
                     else
-                        query_rd_sel <= (rd_sel = '1');
-                        query_wr_sel <= (wr_sel = '1');
+                        query_rd <= rd_sel;
+                        query_wr <= wr_sel;
                     end if;
                 end if;
             end process;
             -----------------------------------------------------------------------
             --
             -----------------------------------------------------------------------
-            query_addr                               <= S_ARADDR   when (rd_sel = '1') else S_AWADDR;
-            query_cache                              <= S_ARCACHE  when (query_rd_sel) else S_AWCACHE;
-            t_data(Q_ID_HI      downto Q_ID_LO     ) <= S_ARID     when (query_rd_sel) else S_AWID;
-            t_data(Q_AUSER_HI   downto Q_AUSER_LO  ) <= S_ARUSER   when (query_rd_sel) else S_AWUSER;
-            t_data(Q_ALEN_HI    downto Q_ALEN_LO   ) <= S_ARLEN    when (query_rd_sel) else S_AWLEN;
-            t_data(Q_ASIZE_HI   downto Q_ASIZE_LO  ) <= S_ARSIZE   when (query_rd_sel) else S_AWSIZE;
-            t_data(Q_ABURST_HI  downto Q_ABURST_LO ) <= S_ARBURST  when (query_rd_sel) else S_AWBURST;
-            t_data(Q_ALOCK_HI   downto Q_ALOCK_LO  ) <= S_ARLOCK   when (query_rd_sel) else S_AWLOCK;
-            t_data(Q_APROT_HI   downto Q_APROT_LO  ) <= S_ARPROT   when (query_rd_sel) else S_AWPROT;
-            t_data(Q_AQOS_HI    downto Q_AQOS_LO   ) <= S_ARQOS    when (query_rd_sel) else S_AWQOS;
-            t_data(Q_AREGION_HI downto Q_AREGION_LO) <= S_ARREGION when (query_rd_sel) else S_AWREGION;
+            query_addr                               <= S_ARADDR   when (rd_sel   = '1') else S_AWADDR;
+            query_cache                              <= S_ARCACHE  when (query_rd = '1') else S_AWCACHE;
+            t_data(Q_ID_HI      downto Q_ID_LO     ) <= S_ARID     when (query_rd = '1') else S_AWID;
+            t_data(Q_AUSER_HI   downto Q_AUSER_LO  ) <= S_ARUSER   when (query_rd = '1') else S_AWUSER;
+            t_data(Q_ALEN_HI    downto Q_ALEN_LO   ) <= S_ARLEN    when (query_rd = '1') else S_AWLEN;
+            t_data(Q_ASIZE_HI   downto Q_ASIZE_LO  ) <= S_ARSIZE   when (query_rd = '1') else S_AWSIZE;
+            t_data(Q_ABURST_HI  downto Q_ABURST_LO ) <= S_ARBURST  when (query_rd = '1') else S_AWBURST;
+            t_data(Q_ALOCK_HI   downto Q_ALOCK_LO  ) <= S_ARLOCK   when (query_rd = '1') else S_AWLOCK;
+            t_data(Q_APROT_HI   downto Q_APROT_LO  ) <= S_ARPROT   when (query_rd = '1') else S_AWPROT;
+            t_data(Q_AQOS_HI    downto Q_AQOS_LO   ) <= S_ARQOS    when (query_rd = '1') else S_AWQOS;
+            t_data(Q_AREGION_HI downto Q_AREGION_LO) <= S_ARREGION when (query_rd = '1') else S_AWREGION;
             -----------------------------------------------------------------------
             --
             -----------------------------------------------------------------------
             query_req <= '1' when (arb_valid = '1' and query_wait = '0') else '0';
             arb_shift <= '1' when (t_valid = '1' and t_ready = '1') else '0';
-            S_ARREADY <= '1' when (t_valid = '1' and t_ready = '1' and query_rd_sel) else '0';
-            S_AWREADY <= '1' when (t_valid = '1' and t_ready = '1' and query_wr_sel) else '0';
+            S_ARREADY <= '1' when (t_valid = '1' and t_ready = '1' and query_rd = '1') else '0';
+            S_AWREADY <= '1' when (t_valid = '1' and t_ready = '1' and query_wr = '1') else '0';
         end generate;
         ---------------------------------------------------------------------------
         -- READ ONLY
         ---------------------------------------------------------------------------
         RO: if (READ_ENABLE /= 0 and WRITE_ENABLE = 0) generate
-            query_rd_sel <= TRUE;
-            query_wr_sel <= FALSE;
-            query_req    <= '1' when (S_ARVALID = '1' and query_wait = '0') else '0';
-            query_addr   <= S_ARADDR;
-            query_cache  <= S_ARCACHE;
+            query_rd    <= '1';
+            query_wr    <= '0';
+            query_req   <= '1' when (S_ARVALID = '1' and query_wait = '0') else '0';
+            query_addr  <= S_ARADDR;
+            query_cache <= S_ARCACHE;
             t_data(Q_ID_HI      downto Q_ID_LO     ) <= S_ARID    ;
             t_data(Q_AUSER_HI   downto Q_AUSER_LO  ) <= S_ARUSER  ;
             t_data(Q_ALEN_HI    downto Q_ALEN_LO   ) <= S_ARLEN   ;
@@ -1082,18 +1082,18 @@ begin
             t_data(Q_APROT_HI   downto Q_APROT_LO  ) <= S_ARPROT  ;
             t_data(Q_AQOS_HI    downto Q_AQOS_LO   ) <= S_ARQOS   ;
             t_data(Q_AREGION_HI downto Q_AREGION_LO) <= S_ARREGION;
-            S_ARREADY <= '1' when (t_valid = '1' and t_ready = '1') else '0';
-            S_AWREADY <= '0';
+            S_ARREADY   <= '1' when (t_valid = '1' and t_ready = '1') else '0';
+            S_AWREADY   <= '0';
         end generate;
         ---------------------------------------------------------------------------
         -- WRITE ONLY
         ---------------------------------------------------------------------------
         WO: if (READ_ENABLE = 0 and WRITE_ENABLE /= 0) generate
-            query_rd_sel <= FALSE;
-            query_wr_sel <= TRUE;
-            query_req    <= '1' when (S_AWVALID = '1' and query_wait = '0') else '0';
-            query_addr   <= S_AWADDR;
-            query_cache  <= S_AWCACHE;
+            query_rd    <= '0';
+            query_wr    <= '1';
+            query_req   <= '1' when (S_AWVALID = '1' and query_wait = '0') else '0';
+            query_addr  <= S_AWADDR;
+            query_cache <= S_AWCACHE;
             t_data(Q_ID_HI      downto Q_ID_LO     ) <= S_AWID    ;
             t_data(Q_AUSER_HI   downto Q_AUSER_LO  ) <= S_AWUSER  ;
             t_data(Q_ALEN_HI    downto Q_ALEN_LO   ) <= S_AWLEN   ;
@@ -1103,8 +1103,8 @@ begin
             t_data(Q_APROT_HI   downto Q_APROT_LO  ) <= S_AWPROT  ;
             t_data(Q_AQOS_HI    downto Q_AQOS_LO   ) <= S_AWQOS   ;
             t_data(Q_AREGION_HI downto Q_AREGION_LO) <= S_AWREGION;
-            S_ARREADY <= '0';
-            S_AWREADY <= '1' when (t_valid = '1' and t_ready = '1') else '0';
+            S_ARREADY   <= '0';
+            S_AWREADY   <= '1' when (t_valid = '1' and t_ready = '1') else '0';
         end generate;
         ---------------------------------------------------------------------------
         --
@@ -1120,12 +1120,12 @@ begin
                     query_wait <= '0';
                     query_ok   <= '0';
                 else
-                    if    (query_ack = '1') then
+                    if    (t_valid = '0' and query_ack = '1') then
                         t_valid <= '1';
-                    elsif (t_valid = '1' and t_ready = '1') then
+                    elsif (t_valid = '1' and t_ready   = '1') then
                         t_valid <= '0';
                     end if;
-                    if    (t_valid = '1' and t_ready = '0') then
+                    if    (t_valid = '1' and t_ready   = '0') then
                         query_wait <= '1';
                     else
                         query_wait <= '0';
@@ -1137,7 +1137,7 @@ begin
         ---------------------------------------------------------------------------
         --
         ---------------------------------------------------------------------------
-        process (query_addr, query_cache, query_ok, query_desc, query_rd_sel, query_wr_sel)
+        process (query_addr, query_cache, query_ok, query_desc, query_rd, query_wr)
             variable addr  :  std_logic_vector(M_ADDR_WIDTH     -1 downto 0);
             variable cache :  std_logic_vector(AXI4_ACACHE_WIDTH-1 downto 0);
             
@@ -1162,13 +1162,13 @@ begin
             end if;
             t_data(Q_AADDR_HI  downto Q_AADDR_LO ) <= addr;
             t_data(Q_ACACHE_HI downto Q_ACACHE_LO) <= cache;
-            if (query_wr_sel) then
+            if (query_wr = '1') then
                 t_data(Q_WRITE_POS) <= '1';
             else
                 t_data(Q_WRITE_POS) <= '0';
             end if;
-            if (query_rd_sel and (query_ok = '0' or  query_desc(0) = '0')) or
-               (query_wr_sel and (query_ok = '0' or  query_desc(1) = '0')) then
+            if (query_rd = '1' and (query_ok = '0' or  query_desc(0) = '0')) or
+               (query_wr = '1' and (query_ok = '0' or  query_desc(1) = '0')) then
                 t_data(Q_ERROR_POS) <= '1';
             else
                 t_data(Q_ERROR_POS) <= '0';

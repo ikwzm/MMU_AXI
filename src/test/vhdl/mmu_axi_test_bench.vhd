@@ -2,7 +2,7 @@
 --!     @file    mmu_axi_test_bench.vhd
 --!     @brief   Test Bench for MMU AXI
 --!     @version 1.0.0
---!     @date    2014/10/13
+--!     @date    2014/10/18
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
@@ -1040,7 +1040,7 @@ begin
     F: AXI4_SLAVE_PLAYER
         generic map (
             SCENARIO_FILE   => SCENARIO_FILE   ,
-            NAME            => "F"             ,
+            NAME            => "FETCH"         ,
             READ_ENABLE     => TRUE            ,
             WRITE_ENABLE    => TRUE            ,
             OUTPUT_DELAY    => DELAY           ,
@@ -1139,7 +1139,7 @@ begin
     S: AXI4_MASTER_PLAYER
         generic map (
             SCENARIO_FILE   => SCENARIO_FILE   ,
-            NAME            => "CSR"           ,
+            NAME            => "SLAVE"         ,
             READ_ENABLE     => TRUE            ,
             WRITE_ENABLE    => TRUE            ,
             OUTPUT_DELAY    => DELAY           ,

@@ -2,7 +2,7 @@
 --!     @file    mmu_core.vhd
 --!     @brief   MMU Core Module
 --!     @version 1.0.0
---!     @date    2014/10/13
+--!     @date    2014/10/18
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
@@ -381,7 +381,7 @@ begin
                 if (CLR = '1') then
                     prefetch_regs <= (others => '0');
                 elsif (query_state = QUERY_RUN and QUERY_REQ = '1' and tlb_query_hit(0) = '1') then
-                    curr_addr := unsigned(prefetch_regs(REGS_ADDR'range));
+                    curr_addr := unsigned(QUERY_ADDR(REGS_ADDR'range));
                     next_addr := curr_addr + 1;
                     for i in prefetch_regs'range loop
                         if (REGS_ADDR'low <= i and i <= REGS_ADDR'high) then
@@ -701,7 +701,7 @@ begin
                     REGS_WEN    => addr_wen            , -- In  :
                     REGS_WDATA  => addr_data           , -- In  :
                     REGS_RDATA  => open                , -- Out :
-                    UP_ENA      => '1'                 , -- In  :
+                    UP_ENA      => tran_busy           , -- In  :
                     UP_VAL      => FETCH_ACK_VALID     , -- In  :
                     UP_BEN      => addr_up_ben         , -- In  :
                     UP_SIZE     => FETCH_ACK_SIZE      , -- In  :
@@ -805,7 +805,7 @@ begin
                     REGS_WEN    => size_wen            , -- In  :
                     REGS_WDATA  => size_data           , -- In  :
                     REGS_RDATA  => open                , -- Out :
-                    DN_ENA      => '1'                 , -- In  :
+                    DN_ENA      => tran_busy           , -- In  :
                     DN_VAL      => FETCH_ACK_VALID     , -- In  :
                     DN_SIZE     => FETCH_ACK_SIZE      , -- In  :
                     COUNTER     => FETCH_REQ_SIZE      , -- Out :
@@ -839,14 +839,18 @@ begin
                 end loop;
                 size_data <= select_size(size_vec, tlb_sel_d);
             end process;
+            -----------------------------------------------------------------------
+            --
+            -----------------------------------------------------------------------
+            size_wen <= (others => '1') when (tran_start = '1') else (others => '0');
         end block;
         ---------------------------------------------------------------------------
         -- FETCH BUF PTR REGISTER
         ---------------------------------------------------------------------------
         BUF_PTR: block
-            constant  ALL_ZERO : std_logic_vector(FETCH_PTR_BITS-1 downto 0) := (others => '0');
-            constant  ALL_ONE  : std_logic_vector(FETCH_PTR_BITS-1 downto 0) := (others => '1');
-            signal    wen      : std_logic_vector(FETCH_PTR_BITS-1 downto 0);
+            constant  PTR_ALL_ONE  : std_logic_vector(FETCH_PTR_BITS-1 downto 0) := (others => '1');
+            constant  PTR_ALL_ZERO : std_logic_vector(FETCH_PTR_BITS-1 downto 0) := (others => '0');
+            signal    ptr_wen      : std_logic_vector(FETCH_PTR_BITS-1 downto 0);
         begin 
             -----------------------------------------------------------------------
             -- 
@@ -861,16 +865,16 @@ begin
                     CLK         => CLK                 , -- In  :
                     RST         => RST                 , -- In  :
                     CLR         => CLR                 , -- In  :
-                    REGS_WEN    => wen                 , -- In  :
-                    REGS_WDATA  => ALL_ZERO            , -- In  :
+                    REGS_WEN    => ptr_wen             , -- In  :
+                    REGS_WDATA  => PTR_ALL_ZERO        , -- In  :
                     REGS_RDATA  => open                , -- Out :
-                    UP_ENA      => '1'                 , -- In  :
+                    UP_ENA      => tran_busy           , -- In  :
                     UP_VAL      => FETCH_ACK_VALID     , -- In  :
-                    UP_BEN      => ALL_ONE             , -- In  :
+                    UP_BEN      => PTR_ALL_ONE         , -- In  :
                     UP_SIZE     => FETCH_ACK_SIZE      , -- In  :
                     COUNTER     => FETCH_REQ_PTR         -- Out :
                 );                                       --
-            wen <= ALL_ONE when (tran_start = '1') else ALL_ZERO;
+            ptr_wen <= PTR_ALL_ONE when (tran_start = '1') else PTR_ALL_ZERO;
         end block;
     end block;
 end RTL;
