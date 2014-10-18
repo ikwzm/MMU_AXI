@@ -2,6 +2,7 @@ DUMMY_PLUG_WORK_PATH = ../../Dummy_Plug/sim/ghdl/dummy_plug
 PIPEWORK_WORK_PATH   = ../../PipeWork/sim/ghdl
 SRC_PATH             = ../../src
 
+COPY       = cp
 GHDL       = ghdl
 GHDLFLAGS  = --mb-comments -P$(DUMMY_PLUG_WORK_PATH) -P$(PIPEWORK_WORK_PATH)
 
@@ -26,8 +27,11 @@ $(TEST_BENCH) : $(addsuffix .o,$(TEST_BENCH)) $(addsuffix .snr,$(TEST_BENCH))
 	 $(GHDL) -e $(GHDLFLAGS) --work=WORK $@
 	-$(GHDL) -r $(GHDLFLAGS) --work=WORK $@
 
-mmu_axi_test_bench.o : $(SRC_PATH)/test/vhdl/mmu_axi_test_bench.vhd 
+mmu_axi_test_bench.o   : $(SRC_PATH)/test/vhdl/mmu_axi_test_bench.vhd 
 	 $(GHDL) -a $(GHDLFLAGS) --work=WORK $<
+
+mmu_axi_test_bench.snr : $(SRC_PATH)/test/scenarios/mmu_axi_test_bench.snr
+	$(COPY) $< $@
 
 DUT : $(addsuffix .o,$(COMPONENTS))
 

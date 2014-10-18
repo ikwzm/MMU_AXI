@@ -1,0 +1,97 @@
+---
+- MARCHAL : 
+  - SAY : MMU_AXI_TEST 1 START
+---
+- MARCHAL : 
+  - SAY : MMU_AXI_TEST 1.1 START
+- CSR : 
+  - WRITE : 
+      ADDR : 0x00000000
+      ID   : 10
+      DATA : - 0x00000000 # Reserve   [31:00]
+             - 0x00000000 # Reserve   [63:32]
+             - 0x00000000 # Prefetch  [31:00]
+             - 0x00000000 # Prefetch  [31:00]
+             - 0x3C000003 # Descripter[31:00]
+             - 0x00000000 # Descripter[63:32]
+             - 0x00000000 # Mode      [31:00]
+             - 0x01000000 # CtrlStatus[31:00]
+      RESP : OKAY
+  - SYNC  : {PORT: LOCAL}
+  - READ  : 
+      ADDR : 0x00000000
+      ID   : 10
+      DATA : - 0x00000000 # Reserve   [31:00]
+             - 0x00000000 # Reserve   [63:32]
+             - 0x00000000 # Prefetch  [31:00]
+             - 0x00000000 # Prefetch  [31:00]
+             - 0x3C000003 # Descripter[31:00]
+             - 0x00000000 # Descripter[63:32]
+             - 0x00000000 # Mode      [31:00]
+             - 0x01000000 # CtrlStatus[31:00]
+      RESP : OKAY
+  - SYNC  : {PORT: LOCAL}
+---
+- SLAVE   :
+  - SYNC  : {PORT : LOCAL}
+  - READ  : {ADDR: 0x00000000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00001000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00002000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00003000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00004000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00005000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00006000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00007000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x00008000, DATA: 0x00000000, RESP: OKAY}
+- MASTER  :
+  - READ  : {ADDR: 0x20000000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20001000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20002000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20003000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20004000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20005000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20006000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20007000, DATA: 0x00000000, RESP: OKAY}
+  - READ  : {ADDR: 0x20008000, DATA: 0x00000000, RESP: OKAY}
+- FETCH   :
+  - READ   : 
+      ADDR : 0x3C000000
+      DATA : - 0x38400000
+      RESP : OKAY
+  - READ   : 
+      ADDR : 0x38400000
+      DATA : - 0x20000003
+      DATA : - 0x20001003
+      DATA : - 0x20002003
+      DATA : - 0x20003003
+      DATA : - 0x20004003
+      DATA : - 0x20005003
+      DATA : - 0x20006003
+      DATA : - 0x20007003
+      RESP : OKAY
+  - READ   : 
+      ADDR : 0x38400020
+      DATA : - 0x20008003
+      DATA : - 0x20009003
+      DATA : - 0x2000A003
+      DATA : - 0x2000B003
+      DATA : - 0x2000C003
+      DATA : - 0x2000D003
+      DATA : - 0x2000E003
+      DATA : - 0x2000F003
+      RESP : OKAY
+  - READ   : 
+      ADDR : 0x38400040
+      DATA : - 0x20010003
+      DATA : - 0x20011003
+      DATA : - 0x20012003
+      DATA : - 0x20013003
+      DATA : - 0x20014003
+      DATA : - 0x20015003
+      DATA : - 0x20016003
+      DATA : - 0x20017003
+      RESP : OKAY
+
+---
+- MARCHAL : 
+  - SAY : MMU_AXI_TEST 1.1 DONE
