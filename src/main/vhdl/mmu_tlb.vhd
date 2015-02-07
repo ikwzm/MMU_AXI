@@ -1,12 +1,12 @@
 -----------------------------------------------------------------------------------
 --!     @file    mmu_tlb.vhd
 --!     @brief   MMU Translation-Lookaside-Buffer 
---!     @version 1.0.0
---!     @date    2014/10/13
+--!     @version 1.0.1
+--!     @date    2015/2/7
 --!     @author  Ichiro Kawazome <ichiro_k@ca2.so-net.ne.jp>
 -----------------------------------------------------------------------------------
 --
---      Copyright (C) 2014 Ichiro Kawazome
+--      Copyright (C) 2014-2015 Ichiro Kawazome
 --      All rights reserved.
 --
 --      Redistribution and use in source and binary forms, with or without
@@ -79,6 +79,7 @@ use     ieee.std_logic_1164.all;
 use     ieee.numeric_std.all;
 library PipeWork;
 use     PipeWork.Components.SDPRAM;
+use     PipeWork.Components.LEAST_RECENTLY_USED_SELECTOR;
 architecture RTL of MMU_TLB is
     -------------------------------------------------------------------------------
     -- 指定されたベクタのリダクション論理和を求める関数.
@@ -176,22 +177,6 @@ architecture RTL of MMU_TLB is
     signal    tag_load          :  std_logic_vector(TAG_SETS-1 downto 0);
     signal    lru_load          :  std_logic_vector(TAG_SETS-1 downto 0);
     signal    lru_select        :  std_logic_vector(TAG_SETS-1 downto 0);
-    -------------------------------------------------------------------------------
-    --
-    -------------------------------------------------------------------------------
-    component MMU_TLB_LRU
-        generic (
-            NUM_SETS    : integer := 4
-        );
-        port (
-            CLK         : in  std_logic; 
-            RST         : in  std_logic;
-            CLR         : in  std_logic;
-            I_HIT       : in  std_logic_vector(NUM_SETS-1 downto 0);
-            Q_SEL       : out std_logic_vector(NUM_SETS-1 downto 0);
-            O_SEL       : out std_logic_vector(NUM_SETS-1 downto 0)
-        );
-    end component;
 begin
     -------------------------------------------------------------------------------
     -- Tag Data and Status
@@ -248,11 +233,11 @@ begin
     -------------------------------------------------------------------------------
     -- TLBのセットから最も過去に選択したエントリを選択する.
     -------------------------------------------------------------------------------
-    LRU: MMU_TLB_LRU generic map (NUM_SETS => TAG_SETS) port map(
+    LRU: LEAST_RECENTLY_USED_SELECTOR generic map (ENTRY_SIZE => TAG_SETS) port map(
             CLK         => CLK         , -- In  :
             RST         => RST         , -- In  :
             CLR         => CLR         , -- In  :
-            I_HIT       => lru_load    , -- In  :
+            I_SEL       => lru_load    , -- In  :
             Q_SEL       => open        , -- Out :
             O_SEL       => lru_select    -- Out :
         );

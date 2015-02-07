@@ -9,7 +9,6 @@ GHDLFLAGS  = --mb-comments -P$(DUMMY_PLUG_WORK_PATH) -P$(PIPEWORK_WORK_PATH)
 COMPONENTS = mmu_axi     \
              mmu_core    \
              mmu_tlb     \
-             mmu_tlb_lru \
              $(END_LIST)
 
 
@@ -44,5 +43,3 @@ mmu_core.o    : $(SRC_PATH)/main/vhdl/mmu_core.vhd
 mmu_tlb.o     : $(SRC_PATH)/main/vhdl/mmu_tlb.vhd 
 	 $(GHDL) -a $(GHDLFLAGS) --work=WORK $<
 
-mmu_tlb_lru.o : $(SRC_PATH)/main/vhdl/mmu_tlb_lru.vhd 
-	 $(GHDL) -a $(GHDLFLAGS) --work=WORK $<
